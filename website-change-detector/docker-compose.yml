@@ -1,0 +1,16 @@
+services:
+  detector:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      CHROMIUM_NO_SANDBOX: "1"
+    volumes:
+      - detector-data:/data
+    init: true
+    ipc: host
+    restart: unless-stopped
+volumes:
+  detector-data: {}

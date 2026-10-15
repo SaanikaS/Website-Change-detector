@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Version timeline</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div><a href="/">← All pages</a><h1 id="title">Version timeline</h1><div class="url" id="sub"></div></div>
+    <button class="primary" id="compare" disabled>Compare 2 selected versions</button>
+  </header>
+  <main><div id="list"></div></main>
+  <script type="module">
+    import { api, fmt, esc, qs, imgUrl } from '/common.js';
+    const id = qs('monitor');
+    const list = document.getElementById('list');
+    const btn = document.getElementById('compare');
+    try {
+      const { monitor, snapshots } = await api(`/api/monitors/${id}/timeline`);
+      document.getElementById('title').textContent = monitor.name;
+      document.getElementById('sub').textContent = monitor.url;
+      if (!snapshots.length) list.innerHTML = '<div class="empty">No versions yet. The first check saves a baseline.</div>';
+      else list.innerHTML = `<div class="scroll"><table><thead><tr><th></th><th>Version</th><th>Captured</th><th>What changed</th><th></th></tr></thead><tbody>` +
+        snapshots.map((s, i) => `<tr>
+          <td><input type="checkbox" class="pick" value="${s.id}" aria-label="Select version ${s.id}" style="width:auto"></td>
+          <td>${s.has_screenshot ? `<img class="thumb" loading="lazy" alt="" src="${esc(imgUrl('/api/snapshots/' + s.id + '/screenshot'))}">` : ''}</td>
+          <td>${fmt(s.created_at)}<div class="muted">#${s.id}</div></td>
+          <td>${s.from_snapshot_id
+            ? `${s.significant ? '<span class="badge error">meaningful</span> ' : '<span class="badge pending">minor</span> '}${esc(s.summary || '')}
+               <div class="muted">+${s.added} / −${s.removed} lines${s.pixel_diff_pct != null ? ` · ${s.pixel_diff_pct.toFixed(1)}% of pixels` : ''}</div>`
+            : '<span class="muted">Baseline (first check)</span>'}</td>
+          <td>${s.from_snapshot_id ? `<a class="btn small" href="/diff.html?monitor=${id}&from=${s.from_snapshot_id}&to=${s.id}">View diff</a>` : ''}</td>
+        </tr>`).join('') + '</tbody></table></div>';
+    } catch (e) { list.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    list.addEventListener('change', () => {
+      btn.disabled = list.querySelectorAll('.pick:checked').length !== 2;
+    });
+    btn.onclick = () => {
+      const [a, b] = [...list.querySelectorAll('.pick:checked')].map((c) => Number(c.value)).sort((x, y) => x - y);
+      location.href = `/diff.html?monitor=${id}&from=${a}&to=${b}`;
+    };
+  </script>
+</body>
+</html>

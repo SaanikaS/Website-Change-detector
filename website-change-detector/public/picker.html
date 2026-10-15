@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pick regions</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div><h1>Pick regions to watch or ignore</h1><div class="url" id="url"></div></div>
+    <div class="row">
+      <label class="checkline"><input type="radio" name="mode" value="watch" checked> Watch</label>
+      <label class="checkline"><input type="radio" name="mode" value="ignore"> Ignore</label>
+      <button class="primary" id="apply" disabled>Use these regions</button>
+    </div>
+  </header>
+  <main>
+    <p class="muted" id="status">Loading a live preview of the page. This can take up to 30 seconds…</p>
+    <div class="picker-wrap" id="wrap" hidden>
+      <div class="stage" id="stage"><canvas id="cv"></canvas></div>
+      <div class="card">
+        <p class="muted">Hover to outline an element, click to add it to the current mode. Click it again to remove it.</p>
+        <strong>Watch only</strong><div class="sel-list" id="watchList"></div>
+        <strong style="display:block;margin-top:14px">Ignore</strong><div class="sel-list" id="ignoreList"></div>
+      </div>
+    </div>
+  </main>
+  <script type="module">
+    import { api, qs, esc } from '/common.js';
+    const target = qs('url');
+    document.getElementById('url').textContent = target || '';
+    const sel = { watch: new Set((qs('watch') || '').split('\n').map((s) => s.trim()).filter(Boolean)),
+                  ignore: new Set((qs('ignore') || '').split('\n').map((s) => s.trim()).filter(Boolean)) };
+    const statusEl = document.getElementById('status');
+    const cv = document.getElementById('cv'); const ctx = cv.getContext('2d');
+    let els = [], img = null, hover = null;
+
+    const mode = () => document.querySelector('input[name=mode]:checked').value;
+    function draw() {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, 0, 0);
+      const box = (e, color, fill) => { ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.fillStyle = fill; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.strokeRect(e.x, e.y, e.w, e.h); };
+      for (const e of els) {
+        if (sel.watch.has(e.selector)) box(e, '#17753f', 'rgba(23,117,63,.22)');
+        if (sel.ignore.has(e.selector)) box(e, '#b42318', 'rgba(180,35,24,.25)');
+      }
+      if (hover) box(hover, '#0b6e99', 'rgba(11,110,153,.15)');
+    }
+    function lists() {
+      for (const k of ['watch', 'ignore']) {
+        document.getElementById(k + 'List').innerHTML = [...sel[k]].map((s) =>
+          `<div class="sel-item ${k}"><span>${esc(s)}</span><button class="small" data-k="${k}" data-s="${esc(s)}">Remove</button></div>`).join('') || '<span class="muted">None</span>';
+      }
+      document.getElementById('apply').disabled = false;
+    }
+    function hit(ev) {
+      const r = cv.getBoundingClientRect();
+      const x = (ev.clientX - r.left) * (cv.width / r.width), y = (ev.clientY - r.top) * (cv.height / r.height);
+      let best = null;
+      for (const e of els) if (x >= e.x && x <= e.x + e.w && y >= e.y && y <= e.y + e.h && (!best || e.w * e.h < best.w * best.h)) best = e;
+      return best;
+    }
+    cv.addEventListener('mousemove', (ev) => { hover = hit(ev); draw(); });
+    cv.addEventListener('click', (ev) => {
+      const e = hit(ev); if (!e) return;
+      const set = sel[mode()];
+      if (set.has(e.selector)) set.delete(e.selector); else set.add(e.selector);
+      lists(); draw();
+    });
+    document.getElementById('wrap').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button[data-k]'); if (!b) return;
+      sel[b.dataset.k].delete(b.dataset.s); lists(); draw();
+    });
+    document.getElementById('apply').onclick = () => {
+      window.opener?.postMessage({ type: 'selectors', watch: [...sel.watch], ignore: [...sel.ignore] }, location.origin);
+      window.close();
+    };
+
+    try {
+      const data = await api('/api/picker', { method: 'POST', body: { url: target } });
+      els = data.elements;
+      img = new Image();
+      img.onload = () => {
+        cv.width = data.width; cv.height = data.height;
+        document.getElementById('wrap').hidden = false; statusEl.hidden = true;
+        lists(); draw();
+      };
+      img.src = 'data:image/jpeg;base64,' + data.image;
+    } catch (e) { statusEl.textContent = e.message; statusEl.className = 'error-text'; }
+  </script>
+</body>
+</html>

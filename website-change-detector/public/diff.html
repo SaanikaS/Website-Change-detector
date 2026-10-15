@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compare versions</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div><a id="back" href="/">← Timeline</a><h1 id="title">Compare versions</h1><div class="muted" id="sub"></div></div>
+  </header>
+  <main>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="text" aria-selected="true">Text diff</button>
+      <button role="tab" data-tab="shot" aria-selected="false">Highlighted screenshot diff</button>
+      <button role="tab" data-tab="side" aria-selected="false">Side by side</button>
+    </div>
+    <div id="out"></div>
+  </main>
+  <script type="module">
+    import { api, fmt, esc, qs, imgUrl } from '/common.js';
+    const monitor = qs('monitor');
+    const out = document.getElementById('out');
+    document.getElementById('back').href = '/timeline.html?monitor=' + monitor;
+    let data;
+    try {
+      data = await api(`/api/monitors/${monitor}/diff?from=${qs('from') || ''}&to=${qs('to') || ''}`);
+    } catch (e) { out.innerHTML = `<div class="empty">${esc(e.message)}</div>`; throw e; }
+    document.getElementById('title').textContent = data.monitor.name;
+    document.getElementById('sub').textContent =
+      `#${data.from.id} (${fmt(data.from.created_at)}) → #${data.to.id} (${fmt(data.to.created_at)}) · +${data.added} / −${data.removed} lines`;
+
+    // Build rows for a two-column diff, collapsing long unchanged runs
+    function rows() {
+      const r = [];
+      for (const p of data.parts) {
+        if (p.type === 'same' && p.lines.length > 8) {
+          p.lines.slice(0, 3).forEach((l) => r.push([l, l, '']));
+          r.push([`… ${p.lines.length - 6} unchanged lines …`, `… ${p.lines.length - 6} unchanged lines …`, 'gap']);
+          p.lines.slice(-3).forEach((l) => r.push([l, l, '']));
+        } else if (p.type === 'same') p.lines.forEach((l) => r.push([l, l, '']));
+        else if (p.type === 'del') p.lines.forEach((l) => r.push([l, null, 'del']));
+        else p.lines.forEach((l) => r.push([null, l, 'add']));
+      }
+      return r;
+    }
+    const cell = (v, cls) => `<td class="${v === null ? '' : cls}">${v === null ? '' : esc(v)}</td>`;
+    const views = {
+      text() {
+        const lines = data.parts.flatMap((p) => p.type === 'same'
+          ? (p.lines.length > 8 ? [...p.lines.slice(0, 3).map((l) => ['same', l]), ['gap', `… ${p.lines.length - 6} unchanged lines …`], ...p.lines.slice(-3).map((l) => ['same', l])] : p.lines.map((l) => ['same', l]))
+          : p.lines.map((l) => [p.type, l]));
+        return `<div class="card"><table class="diff-table"><tbody>${lines.map(([t, l]) =>
+          `<tr><td style="width:100%" class="${t === 'add' ? 'add' : t === 'del' ? 'del' : t === 'gap' ? 'gap' : ''}">${t === 'add' ? '+ ' : t === 'del' ? '− ' : '  '}${esc(l)}</td></tr>`).join('')}</tbody></table></div>`;
+      },
+      shot() {
+        if (!data.from.has_screenshot || !data.to.has_screenshot) return '<div class="empty">Screenshots are not available for these versions.</div>';
+        return `<div class="single-shot"><p class="muted">Changed pixels are shown in pink.</p><img alt="Highlighted difference between the two versions" src="${esc(imgUrl(`/api/diff-image?from=${data.from.id}&to=${data.to.id}`))}"></div>`;
+      },
+      side() {
+        const shots = data.from.has_screenshot && data.to.has_screenshot
+          ? `<div class="shots" style="margin-bottom:18px"><div><strong>Before · #${data.from.id}</strong><img alt="Earlier version" src="${esc(imgUrl('/api/snapshots/' + data.from.id + '/screenshot'))}"></div>
+             <div><strong>After · #${data.to.id}</strong><img alt="Later version" src="${esc(imgUrl('/api/snapshots/' + data.to.id + '/screenshot'))}"></div></div>` : '';
+        return shots + `<div class="card"><table class="diff-table"><thead><tr><th>Before</th><th>After</th></tr></thead><tbody>${rows().map(([a, b, c]) =>
+          `<tr>${cell(a, c === 'add' ? '' : c)}${cell(b, c === 'del' ? '' : c)}</tr>`).join('')}</tbody></table></div>`;
+      },
+    };
+    function show(tab) {
+      document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+      out.innerHTML = views[tab]();
+    }
+    document.querySelector('.tabs').addEventListener('click', (e) => { const t = e.target.closest('button'); if (t) show(t.dataset.tab); });
+    show('text');
+  </script>
+</body>
+</html>

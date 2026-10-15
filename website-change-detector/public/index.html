@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Website Change Detector</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Website Change Detector</h1>
+    <button class="primary" id="add">Add page to watch</button>
+  </header>
+  <main>
+    <div id="notice" class="muted" style="margin-bottom:12px"></div>
+    <div id="list"></div>
+  </main>
+
+  <dialog id="dlg">
+    <form id="form">
+      <h2 id="dlg-title">Add page to watch</h2>
+      <input type="hidden" name="id">
+      <div class="grid2">
+        <label>Name<input name="name" required maxlength="100" placeholder="Pricing page"></label>
+        <label>Check every
+          <select name="interval_min">
+            <option value="15">15 minutes</option><option value="30">30 minutes</option>
+            <option value="60" selected>1 hour</option><option value="180">3 hours</option>
+            <option value="360">6 hours</option><option value="720">12 hours</option>
+            <option value="1440">24 hours</option>
+          </select>
+        </label>
+      </div>
+      <label>Page URL<input name="url" type="url" required placeholder="https://example.com/pricing"><small>Public pages only. Credentials are never stored.</small></label>
+      <fieldset>
+        <legend>What to watch</legend>
+        <div class="row"><button type="button" id="pick">Pick regions visually</button><span class="muted">or type CSS selectors, one per line</span></div>
+        <label>Only watch these regions<textarea name="watch_selectors" placeholder="Leave empty to watch the whole page"></textarea></label>
+        <label>Ignore these regions<textarea name="ignore_selectors" placeholder="#live-ticker&#10;.promo-banner"></textarea></label>
+        <div class="grid2">
+          <label>Sensitivity
+            <select name="sensitivity">
+              <option value="high">High: any text change</option>
+              <option value="medium" selected>Medium: skip tiny changes</option>
+              <option value="low">Low: only big changes, numbers ignored</option>
+            </select>
+          </label>
+          <label>Only alert on keywords<input name="keywords" placeholder="sold out, price, hiring"><small>Comma separated. Empty = any change.</small></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Where to send alerts</legend>
+        <label>Email<input name="notify_email" type="email" placeholder="you@example.com"></label>
+        <label>Discord webhook URL<input name="discord_webhook" placeholder="https://discord.com/api/webhooks/…"></label>
+        <label>Telegram chat id<input name="telegram_chat_id" placeholder="123456789 or @mychannel"></label>
+        <label class="checkline"><input type="checkbox" name="digest"> Send one daily digest instead of instant alerts</label>
+      </fieldset>
+      <div class="error-text" id="form-error" role="alert"></div>
+      <div class="row"><span class="spacer"></span><button type="button" id="cancel">Cancel</button><button class="primary" id="save">Save</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
